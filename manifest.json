@@ -1,13 +1,13 @@
 {
-  "name": "FOIS Loaded-Rakes Desk",
-  "short_name": "Rakes Desk",
-  "description": "APGENCO and APPDCL coal loading",
+  "name": "APGENCO Coal Logistics Desk",
+  "short_name": "Coal Desk",
+  "description": "Loading, rakes in transit and the daily coal report",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",
   "orientation": "any",
-  "background_color": "#f3f5f8",
-  "theme_color": "#f3f5f8",
+  "background_color": "#eef2f7",
+  "theme_color": "#0c2242",
   "icons": [
     {"src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any"},
     {"src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any"},
