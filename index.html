@@ -42,7 +42,8 @@ button.alt{background:#fff;color:#15202c;border:1px solid #cfd7e1}
 <script>
 (function(){
 const SB={url:'https://kqahazjjjsvpkegeopgu.supabase.co',key:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtxYWhhempqanN2cGtlZ2VvcGd1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTExOTEwNjAsImV4cCI6MjEwNjc2NzA2MH0.gERW2EK5svGYoIxTLxIhGN2WckB-VRR9eVMu088Wm9A'};
-const RUN=/[?&]run\b/.test(location.search);
+const PAGE=/[?&]run\b/.test(location.search)?{id:2,name:'Coal Rakes on Run'}:/[?&]coal\b/.test(location.search)?{id:3,name:'Daily Coal Report'}:{id:1,name:''};
+const RUN=PAGE.id!==1;
 const $=function(id){return document.getElementById(id);};
 function show(id,v){const e=$(id); if(e) e.classList.toggle('hide',!v);}
 function say(t){const e=$('msg'); if(e) e.textContent=t||'';}
@@ -67,25 +68,37 @@ async function rest(path,opt){
   if(!r.ok){const e=new Error('Request failed');e.status=r.status;throw e;}
   return opt.method?null:r.json();
 }
-function signOut(){['fois_auth','fois_pend','fois_cloud','fois_role','fois_loadsheet_apg','fois_loadsheet_app'].forEach(function(k){localStorage.removeItem(k);});location.reload();}
+function signOut(){try{window.caches&&caches.delete('fois-pages');}catch(e){}['fois_auth','fois_pend','fois_cloud','fois_role','fois_loadsheet_apg','fois_loadsheet_app'].forEach(function(k){localStorage.removeItem(k);});location.reload();}
 let editor=false;
 /* what a page written by this one may use: the signed-in session, nothing else */
 window.FOIS_HOST={rest:rest,isEditor:function(){return editor;},signOut:signOut};
 function writeDoc(html){document.open();document.write(html);document.close();}
+/* pages are kept on the device after the first load, and fetched again only when they change */
+async function cached(id){try{const c=await caches.open('fois-pages');const r=await c.match('/__page/'+id);return r?{ver:r.headers.get('x-ver'),html:await r.text()}:null;}catch(e){return null;}}
+async function loadPage(id){
+  const meta=await rest('fois_app?select=updated_at&id=eq.'+id);
+  if(!meta.length) return null;
+  const ver=meta[0].updated_at, hit=await cached(id);
+  if(hit&&hit.ver===ver&&hit.html) return hit.html;
+  const rows=await rest('fois_app?select=html&id=eq.'+id);
+  if(!rows.length||!rows[0].html) return null;
+  try{const c=await caches.open('fois-pages');await c.put('/__page/'+id,new Response(rows[0].html,{headers:{'x-ver':ver,'content-type':'text/html;charset=utf-8'}}));}catch(e){}
+  return rows[0].html;
+}
 async function openApp(){
   show('form',false);say('Opening…');
   try{
     const ed=await rest('fois_editors?select=email'); editor=ed.length>0;
     const wantSetup=location.hash==='#update';
-    const rows=wantSetup?[]:await rest('fois_app?select=html&id=eq.'+(RUN?2:1));
-    if(rows.length&&rows[0].html){ writeDoc(rows[0].html); return; }
-    if(RUN){ $('lead').textContent='The Rakes on Run page has not been published yet. The owner publishes it by opening the loading desk once.'; show('back',true); say(''); return; }
+    const html=wantSetup?null:await loadPage(PAGE.id);
+    if(html){ writeDoc(html); return; }
+    if(RUN){ $('lead').textContent='This page has not been published yet. The owner publishes it by opening the loading desk once.'; show('back',true); say(''); return; }
     if(editor){$('lead').textContent='Upload the app file to publish it for everyone who signs in.';show('setup',true);say('');}
     else if(wantSetup){location.hash='';location.reload();}
     else{$('lead').textContent='This account does not have access yet. Ask the owner to add it.';show('setup',true);show('pick',false);say('');}
   }catch(e){
     if(e.status>=400&&e.status<500&&e.status!==404){localStorage.removeItem('fois_auth');show('form',true);say('Please sign in again.');}
-    else{say('No connection. Check the internet and reload.');}
+    else{ const hit=await cached(PAGE.id); if(hit&&hit.html){ writeDoc(hit.html); return; } say('No connection. Check the internet and reload.'); }
   }
 }
 async function signIn(ev){
@@ -112,7 +125,7 @@ $('form').addEventListener('submit',signIn);
 $('pick').addEventListener('click',function(){$('file').click();});
 $('file').addEventListener('change',function(){publish(this);});
 $('out').addEventListener('click',signOut);
-if(RUN){$('ttl').textContent='Coal Rakes on Run';document.title='Coal Rakes on Run';}
+if(RUN){$('ttl').textContent=PAGE.name;document.title=PAGE.name;}
 if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='127.0.0.1')) navigator.serviceWorker.register('sw.js').catch(function(){});
 if(getAuth()&&getAuth().refresh_token) openApp(); else show('form',true);
 })();
