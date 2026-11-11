@@ -15,34 +15,37 @@ body{margin:0;min-height:100vh;display:grid;place-items:center;background:#f3f5f
 h1{font-size:19px;margin:0 0 4px}p{margin:0 0 20px;font-size:13px;color:#56657b;line-height:1.5}
 label{display:block;font-size:12px;color:#56657b;margin:12px 0 5px}
 input{width:100%;background:#fff;border:1px solid #cfd7e1;border-radius:11px;color:#15202c;font-size:15px;padding:12px 13px}
-input:focus-visible,button:focus-visible{outline:2px solid #2e8fc4;outline-offset:2px}
-button{width:100%;margin-top:18px;border:0;border-radius:11px;padding:13px;font-size:15px;font-weight:700;background:#0e4a6b;color:#fff;cursor:pointer}
+input:focus-visible,button:focus-visible,a:focus-visible{outline:2px solid #2e8fc4;outline-offset:2px}
+button,a.btn{display:block;width:100%;margin-top:18px;border:0;border-radius:11px;padding:13px;font-size:15px;font-weight:700;background:#0e4a6b;color:#fff;cursor:pointer;text-align:center;text-decoration:none}
 button:disabled{opacity:.6;cursor:default}
 button.alt{background:#fff;color:#15202c;border:1px solid #cfd7e1}
 #msg{min-height:18px;margin-top:14px;font-size:13px;color:#8a3b00;line-height:1.45}
 .hide{display:none}
 </style></head><body>
 <main class="card">
-  <h1>FOIS Loaded-Rakes Desk</h1>
+  <h1 id="ttl">FOIS Loaded-Rakes Desk</h1>
   <p id="lead">Sign in to open the app.</p>
-  <form id="form" class="hide" onsubmit="return signIn(event)">
+  <form id="form" class="hide">
     <label for="em">Email</label><input id="em" type="email" autocomplete="username" required>
     <label for="pw">Password</label><input id="pw" type="password" autocomplete="current-password" required>
     <button id="go" type="submit">Sign in</button>
   </form>
   <div id="setup" class="hide">
-    <button type="button" onclick="document.getElementById('file').click()">Choose the app file</button>
-    <input id="file" type="file" accept=".html" hidden onchange="publish(this)">
-    <button type="button" class="alt" onclick="signOut()">Sign out</button>
+    <button type="button" id="pick">Choose the app file</button>
+    <input id="file" type="file" accept=".html" hidden>
+    <button type="button" class="alt" id="out">Sign out</button>
   </div>
-  <button type="button" class="alt hide" id="inst" onclick="installApp()">Install as an app</button>
+  <a class="btn hide" id="back" href="./">Open the loading desk</a>
+  <button type="button" class="alt hide" id="inst">Install as an app</button>
   <div id="msg" role="status" aria-live="polite"></div>
 </main>
 <script>
+(function(){
 const SB={url:'https://kqahazjjjsvpkegeopgu.supabase.co',key:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtxYWhhempqanN2cGtlZ2VvcGd1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTExOTEwNjAsImV4cCI6MjEwNjc2NzA2MH0.gERW2EK5svGYoIxTLxIhGN2WckB-VRR9eVMu088Wm9A'};
+const RUN=/[?&]run\b/.test(location.search);
 const $=function(id){return document.getElementById(id);};
-function show(id,v){$(id).classList.toggle('hide',!v);}
-function say(t){$('msg').textContent=t||'';}
+function show(id,v){const e=$(id); if(e) e.classList.toggle('hide',!v);}
+function say(t){const e=$('msg'); if(e) e.textContent=t||'';}
 function getAuth(){try{return JSON.parse(localStorage.getItem('fois_auth'));}catch(e){return null;}}
 async function authCall(grant,body){
   const r=await fetch(SB.url+'/auth/v1/token?grant_type='+grant,{method:'POST',headers:{'apikey':SB.key,'Content-Type':'application/json'},body:JSON.stringify(body)});
@@ -51,26 +54,35 @@ async function authCall(grant,body){
   const old=getAuth()||{};
   localStorage.setItem('fois_auth',JSON.stringify({access_token:j.access_token,refresh_token:j.refresh_token,expires_at:Date.now()+(j.expires_in||3600)*1000,email:(j.user&&j.user.email)||body.email||old.email||''}));
 }
+let refreshing=null;
 async function rest(path,opt){
   opt=opt||{};
+  let a=getAuth();
+  if(a&&a.expires_at-Date.now()<60000){
+    refreshing=refreshing||authCall('refresh_token',{refresh_token:a.refresh_token}).then(function(){refreshing=null;},function(e){refreshing=null;throw e;});
+    await refreshing; a=getAuth();
+  }
   const r=await fetch(SB.url+'/rest/v1/'+path,{method:opt.method||'GET',cache:'no-store',body:opt.body,
-    headers:Object.assign({'apikey':SB.key,'Authorization':'Bearer '+getAuth().access_token,'Content-Type':'application/json'},opt.headers||{})});
+    headers:Object.assign({'apikey':SB.key,'Authorization':'Bearer '+a.access_token,'Content-Type':'application/json'},opt.headers||{})});
   if(!r.ok){const e=new Error('Request failed');e.status=r.status;throw e;}
   return opt.method?null:r.json();
 }
 function signOut(){['fois_auth','fois_pend','fois_cloud','fois_role','fois_loadsheet_apg','fois_loadsheet_app'].forEach(function(k){localStorage.removeItem(k);});location.reload();}
+let editor=false;
+/* what a page written by this one may use: the signed-in session, nothing else */
+window.FOIS_HOST={rest:rest,isEditor:function(){return editor;},signOut:signOut};
+function writeDoc(html){document.open();document.write(html);document.close();}
 async function openApp(){
   show('form',false);say('Opening…');
   try{
-    const a=getAuth();
-    if(a.expires_at-Date.now()<60000) await authCall('refresh_token',{refresh_token:a.refresh_token});
+    const ed=await rest('fois_editors?select=email'); editor=ed.length>0;
     const wantSetup=location.hash==='#update';
-    const rows=wantSetup?[]:await rest('fois_app?select=html&id=eq.1');
-    if(rows.length&&rows[0].html){document.open();document.write(rows[0].html);document.close();return;}
-    const ed=await rest('fois_editors?select=email');
-    if(ed.length){$('lead').textContent='Upload the app file to publish it for everyone who signs in.';show('setup',true);say('');}
+    const rows=wantSetup?[]:await rest('fois_app?select=html&id=eq.'+(RUN?2:1));
+    if(rows.length&&rows[0].html){ writeDoc(rows[0].html); return; }
+    if(RUN){ $('lead').textContent='The Rakes on Run page has not been published yet. The owner publishes it by opening the loading desk once.'; show('back',true); say(''); return; }
+    if(editor){$('lead').textContent='Upload the app file to publish it for everyone who signs in.';show('setup',true);say('');}
     else if(wantSetup){location.hash='';location.reload();}
-    else{$('lead').textContent='This account does not have access yet. Ask the owner to add it.';show('setup',true);$('setup').firstElementChild.classList.add('hide');say('');}
+    else{$('lead').textContent='This account does not have access yet. Ask the owner to add it.';show('setup',true);show('pick',false);say('');}
   }catch(e){
     if(e.status>=400&&e.status<500&&e.status!==404){localStorage.removeItem('fois_auth');show('form',true);say('Please sign in again.');}
     else{say('No connection. Check the internet and reload.');}
@@ -80,8 +92,7 @@ async function signIn(ev){
   ev.preventDefault();$('go').disabled=true;say('Signing in…');
   try{await authCall('password',{email:$('em').value.trim(),password:$('pw').value});$('pw').value='';await openApp();}
   catch(e){say(e.status?'Sign-in failed: '+e.message:'No connection. Try again when online.');}
-  finally{var g=$('go'); if(g) g.disabled=false;}
-  return false;
+  finally{const g=$('go'); if(g) g.disabled=false;}
 }
 async function publish(inp){
   const f=inp.files&&inp.files[0];if(!f)return;
@@ -94,8 +105,15 @@ async function publish(inp){
   }catch(e){say('The app could not be uploaded'+(e.status?' ('+e.status+')':'')+'.');}
   finally{inp.value='';}
 }
-window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();window.__installEvt=e;var b=$('inst');if(b)b.classList.remove('hide');});
-async function installApp(){var e=window.__installEvt;if(!e)return;e.prompt();try{await e.userChoice;}catch(x){}window.__installEvt=null;$('inst').classList.add('hide');}
+let installEvt=null;
+window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();installEvt=e;show('inst',true);});
+$('inst').addEventListener('click',async function(){if(!installEvt)return;installEvt.prompt();try{await installEvt.userChoice;}catch(x){}installEvt=null;show('inst',false);});
+$('form').addEventListener('submit',signIn);
+$('pick').addEventListener('click',function(){$('file').click();});
+$('file').addEventListener('change',function(){publish(this);});
+$('out').addEventListener('click',signOut);
+if(RUN){$('ttl').textContent='Coal Rakes on Run';document.title='Coal Rakes on Run';}
 if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='127.0.0.1')) navigator.serviceWorker.register('sw.js').catch(function(){});
 if(getAuth()&&getAuth().refresh_token) openApp(); else show('form',true);
+})();
 </script></body></html>
