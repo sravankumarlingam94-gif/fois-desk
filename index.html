@@ -80,7 +80,7 @@ async function signIn(ev){
   ev.preventDefault();$('go').disabled=true;say('Signing in…');
   try{await authCall('password',{email:$('em').value.trim(),password:$('pw').value});$('pw').value='';await openApp();}
   catch(e){say(e.status?'Sign-in failed: '+e.message:'No connection. Try again when online.');}
-  finally{$('go').disabled=false;}
+  finally{var g=$('go'); if(g) g.disabled=false;}
   return false;
 }
 async function publish(inp){
