@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex,nofollow">
+<meta name="theme-color" content="#0b0f1a">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<title>FOIS Loaded-Rakes Desk</title>
+<style>
+*{box-sizing:border-box}
+body{margin:0;min-height:100vh;display:grid;place-items:center;background:#0b0f1a;color:#edf2fb;font-family:'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;padding:20px}
+.card{width:100%;max-width:380px;background:#131a2a;border:1px solid #263048;border-radius:20px;padding:28px}
+h1{font-size:19px;margin:0 0 4px}p{margin:0 0 20px;font-size:13px;color:#9db0cf;line-height:1.5}
+label{display:block;font-size:12px;color:#9db0cf;margin:12px 0 5px}
+input{width:100%;background:#0b0f1a;border:1px solid #2c3854;border-radius:12px;color:#edf2fb;font-size:15px;padding:12px 13px}
+input:focus-visible,button:focus-visible{outline:2px solid #3ccfe4;outline-offset:2px}
+button{width:100%;margin-top:18px;border:0;border-radius:12px;padding:13px;font-size:15px;font-weight:700;background:linear-gradient(90deg,#1f8fb5,#49d6e8);color:#05202a;cursor:pointer}
+button:disabled{opacity:.6;cursor:default}
+button.alt{background:#1c2540;color:#edf2fb;border:1px solid #2c3854}
+#msg{min-height:18px;margin-top:14px;font-size:13px;color:#e8a33d;line-height:1.45}
+.hide{display:none}
+</style></head><body>
+<main class="card">
+  <h1>FOIS Loaded-Rakes Desk</h1>
+  <p id="lead">Sign in to open the app.</p>
+  <form id="form" class="hide" onsubmit="return signIn(event)">
+    <label for="em">Email</label><input id="em" type="email" autocomplete="username" required>
+    <label for="pw">Password</label><input id="pw" type="password" autocomplete="current-password" required>
+    <button id="go" type="submit">Sign in</button>
+  </form>
+  <div id="setup" class="hide">
+    <button type="button" onclick="document.getElementById('file').click()">Choose the app file</button>
+    <input id="file" type="file" accept=".html" hidden onchange="publish(this)">
+    <button type="button" class="alt" onclick="signOut()">Sign out</button>
+  </div>
+  <button type="button" class="alt hide" id="inst" onclick="installApp()">Install as an app</button>
+  <div id="msg" role="status" aria-live="polite"></div>
+</main>
+<script>
+const SB={url:'https://kqahazjjjsvpkegeopgu.supabase.co',key:'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImtxYWhhempqanN2cGtlZ2VvcGd1Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTExOTEwNjAsImV4cCI6MjEwNjc2NzA2MH0.gERW2EK5svGYoIxTLxIhGN2WckB-VRR9eVMu088Wm9A'};
+const $=function(id){return document.getElementById(id);};
+function show(id,v){$(id).classList.toggle('hide',!v);}
+function say(t){$('msg').textContent=t||'';}
+function getAuth(){try{return JSON.parse(localStorage.getItem('fois_auth'));}catch(e){return null;}}
+async function authCall(grant,body){
+  const r=await fetch(SB.url+'/auth/v1/token?grant_type='+grant,{method:'POST',headers:{'apikey':SB.key,'Content-Type':'application/json'},body:JSON.stringify(body)});
+  const j=await r.json().catch(function(){return {};});
+  if(!r.ok){const e=new Error(j.error_description||j.msg||j.message||'Sign-in failed');e.status=r.status;throw e;}
+  const old=getAuth()||{};
+  localStorage.setItem('fois_auth',JSON.stringify({access_token:j.access_token,refresh_token:j.refresh_token,expires_at:Date.now()+(j.expires_in||3600)*1000,email:(j.user&&j.user.email)||body.email||old.email||''}));
+}
+async function rest(path,opt){
+  opt=opt||{};
+  const r=await fetch(SB.url+'/rest/v1/'+path,{method:opt.method||'GET',cache:'no-store',body:opt.body,
+    headers:Object.assign({'apikey':SB.key,'Authorization':'Bearer '+getAuth().access_token,'Content-Type':'application/json'},opt.headers||{})});
+  if(!r.ok){const e=new Error('Request failed');e.status=r.status;throw e;}
+  return opt.method?null:r.json();
+}
+function signOut(){['fois_auth','fois_pend','fois_cloud','fois_role','fois_loadsheet_apg','fois_loadsheet_app'].forEach(function(k){localStorage.removeItem(k);});location.reload();}
+async function openApp(){
+  show('form',false);say('Opening…');
+  try{
+    const a=getAuth();
+    if(a.expires_at-Date.now()<60000) await authCall('refresh_token',{refresh_token:a.refresh_token});
+    const wantSetup=location.hash==='#update';
+    const rows=wantSetup?[]:await rest('fois_app?select=html&id=eq.1');
+    if(rows.length&&rows[0].html){document.open();document.write(rows[0].html);document.close();return;}
+    const ed=await rest('fois_editors?select=email');
+    if(ed.length){$('lead').textContent='Upload the app file to publish it for everyone who signs in.';show('setup',true);say('');}
+    else if(wantSetup){location.hash='';location.reload();}
+    else{$('lead').textContent='This account does not have access yet. Ask the owner to add it.';show('setup',true);$('setup').firstElementChild.classList.add('hide');say('');}
+  }catch(e){
+    if(e.status>=400&&e.status<500&&e.status!==404){localStorage.removeItem('fois_auth');show('form',true);say('Please sign in again.');}
+    else{say('No connection. Check the internet and reload.');}
+  }
+}
+async function signIn(ev){
+  ev.preventDefault();$('go').disabled=true;say('Signing in…');
+  try{await authCall('password',{email:$('em').value.trim(),password:$('pw').value});$('pw').value='';await openApp();}
+  catch(e){say(e.status?'Sign-in failed: '+e.message:'No connection. Try again when online.');}
+  finally{$('go').disabled=false;}
+  return false;
+}
+async function publish(inp){
+  const f=inp.files&&inp.files[0];if(!f)return;
+  try{
+    const html=await f.text();
+    if(html.indexOf('FOIS Loaded-Rakes Desk')<0||html.length<200000){say('That file is not this app.');return;}
+    say('Uploading…');
+    await rest('fois_app?on_conflict=id',{method:'POST',headers:{Prefer:'resolution=merge-duplicates,return=minimal'},body:JSON.stringify([{id:1,html:html}])});
+    location.hash='';location.reload();
+  }catch(e){say('The app could not be uploaded'+(e.status?' ('+e.status+')':'')+'.');}
+  finally{inp.value='';}
+}
+window.addEventListener('beforeinstallprompt',function(e){e.preventDefault();window.__installEvt=e;var b=$('inst');if(b)b.classList.remove('hide');});
+async function installApp(){var e=window.__installEvt;if(!e)return;e.prompt();try{await e.userChoice;}catch(x){}window.__installEvt=null;$('inst').classList.add('hide');}
+if('serviceWorker' in navigator&&(location.protocol==='https:'||location.hostname==='127.0.0.1')) navigator.serviceWorker.register('sw.js').catch(function(){});
+if(getAuth()&&getAuth().refresh_token) openApp(); else show('form',true);
+</script></body></html>
