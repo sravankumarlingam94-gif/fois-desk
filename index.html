@@ -122,12 +122,9 @@ let editor=false;
 function rpc(fn,args){return rest('rpc/'+fn,{method:'POST',json:true,body:JSON.stringify(args||{})});}
 window.FOIS_HOST={rest:rest,rpc:rpc,device:dev,isEditor:function(){return editor;},signOut:signOut};
 function xml(t){return String(t).replace(/[&<>"']/g,function(c){return '&#'+c.charCodeAt(0)+';';});}
-/* viewers see their own name across the page, so a screenshot or print shows whose screen it was */
+/* viewers get the page without the right-click menu or the save and view-source shortcuts */
 function mark(html,name){
-  const n=new Date(),p=function(v){return (v<10?'0':'')+v;},t=xml(name)+'  \u00b7  '+p(n.getDate())+'-'+p(n.getMonth()+1)+'-'+n.getFullYear();
-  const svg="<svg xmlns='http://www.w3.org/2000/svg' width='380' height='230'><text x='190' y='120' text-anchor='middle' transform='rotate(-24 190 115)' font-family='Arial,sans-serif' font-size='15' font-weight='700' fill='#7f8da3' fill-opacity='.17'>"+t+"</text></svg>";
-  const add='<style>#fwm{position:fixed;inset:0;z-index:2147483000;pointer-events:none;background:url("data:image/svg+xml,'+encodeURIComponent(svg)+'")}@media print{#fwm{display:block!important;position:fixed!important}}</style><div id="fwm" aria-hidden="true"></div>'
-   +'<scr'+'ipt>document.addEventListener("contextmenu",function(e){e.preventDefault();});document.addEventListener("keydown",function(e){var k=(e.key||"").toLowerCase();if((e.ctrlKey||e.metaKey)&&(k==="u"||k==="s")){e.preventDefault();}});</scr'+'ipt>';
+  const add='<scr'+'ipt>document.addEventListener("contextmenu",function(e){e.preventDefault();});document.addEventListener("keydown",function(e){var k=(e.key||"").toLowerCase();if((e.ctrlKey||e.metaKey)&&(k==="u"||k==="s")){e.preventDefault();}});</scr'+'ipt>';
   const i=html.lastIndexOf('</body>');return i<0?html+add:html.slice(0,i)+add+html.slice(i);
 }
 function writeDoc(html){document.open();document.write(html);document.close();}
